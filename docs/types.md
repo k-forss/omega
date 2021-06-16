@@ -111,6 +111,78 @@ TODO
 ### Struct `struct`
 Similar to `memory` in syntex, but is not an accual construct but rather a logical collection of that is easier to manage and forward, can contain `memory` but `memory` cannot contain a `struct`
 
+### Context `context`
+Similar to `memory` in syntex, but is atomic and meant to link `module`s with `handler`s
+
+### Example
+```
+module my_module
+{
+    u32 a,
+    u8 b,
+    u16 c,
+    
+    context handler_a_ctx
+    {
+        a,
+        c
+    }
+    
+    handler handler_a() <- handler_a_ctx
+    {
+        // Added by compiler
+        ref context <- super.handler_a_ctx.handler;
+        if (!lock(context))
+        {
+            return;
+        }
+        if (!super.locked)
+        {
+            context = super.handler_a_ctx.super; 
+        }
+        ref a = context.a;
+        ref c = context.c;
+
+        // User code
+        c = a; // Since a and c are references, they will update handlers part of context
+        
+        // Added by compiler
+        mutex_unlock(context);
+    }
+    
+    // Method added by compiler to sync contextes
+    sync_context()
+    {
+        for (ref ctx: self.contextes)
+        {
+            if not locked(ctx)
+            {
+                handler_a_ctx.super = ctx.handler
+            }
+        }
+    }
+    
+    
+    method some_method()
+    {
+        // Added by compiler
+        if (!mutex_lock(self))
+        {
+            return;
+        }
+        ref context = super.handler_a_ctx.super;
+        a = context.a;
+        c = context.c;
+
+        // User code
+        c = some_func(a, b);
+        
+        // Added by compiler
+        mutex_unlock(self);
+    }
+}
+```
+
 ## Conceptual types
 * Contains the logic
 * Hieratical, types can only directly access suberviant types.
@@ -138,7 +210,7 @@ Similar to `memory` in syntex, but is not an accual construct but rather a logic
 * Short
 * Must be in a `module`
 * Made for interrupts, callbacks, etc.
-* Cannot call other modules interfaces, instead it is provided with references to an `atomic` variable that will atomically be synced module->handler if module is not semaphorically locked and handler->module on the next entry to any of the modules methods.
+* Cannot call other modules interfaces, instead it is provided with references to an `context` that will atomically be synced module->handler if module is not semaphorically locked and handler->module on the next entry to any of the modules methods.
 
 ### Interface `interface`
 * Polymorphism
